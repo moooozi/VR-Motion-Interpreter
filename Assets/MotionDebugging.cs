@@ -26,32 +26,12 @@ public class MotionDebugging : MonoBehaviour
     private bool recordData = false;
     private float startTime;
 
-    private Vector3 currentLHandPos = Vector3.zero;
-    private Vector3 currentRHandPos = Vector3.zero;
-    private Vector3 currentHeadPos = Vector3.zero;
-
-    private Vector3 deltaLHandPos = Vector3.zero;
-    private Vector3 deltaRHandPos = Vector3.zero;
-    private Vector3 deltaHeadPos = Vector3.zero;
-
-    private Quaternion deltaLHandRot = Quaternion.identity;
-    private Quaternion deltaRHandRot = Quaternion.identity;
-    private Quaternion deltaHeadRot = Quaternion.identity;
-
-    private Vector3 previousLHandPos = Vector3.zero;
-    private Vector3 previousHeadPos = Vector3.zero;
-    private Vector3 previousRHandPos = Vector3.zero;
-
-    private Quaternion previousLHandRot;
-    private Quaternion previousRHandRot;
-    private Quaternion previousHeadRot;
-
-    private Quaternion currentLHandRot;
-    private Quaternion currentRHandRot;
-    private Quaternion currentHeadRot;
+    private SensorData leftHand = new SensorData();
+    private SensorData rightHand = new SensorData();
+    private SensorData head = new SensorData();
 
     private StepFeedback stepFeedback;
-    private string step = "";
+    private int step = 0;
     TextMeshProUGUI debugScreenText;
 
     [SerializeField] float resetInterval = 0.05f; // Reset interval in seconds
@@ -111,19 +91,19 @@ public class MotionDebugging : MonoBehaviour
         csvData = string.Join(",", new string[]
         {
             FormatFloat(startTime),
-            step,
-            FormatFloat(deltaLHandPos[0]), FormatFloat(deltaLHandPos[1]), FormatFloat(deltaLHandPos[2]),
-            FormatFloat(deltaLHandRot[0]), FormatFloat(deltaLHandRot[1]), FormatFloat(deltaLHandRot[2]),
-            FormatFloat(deltaHeadPos[0]), FormatFloat(deltaHeadPos[1]), FormatFloat(deltaHeadPos[2]),
-            FormatFloat(deltaHeadRot[0]), FormatFloat(deltaHeadRot[1]), FormatFloat(deltaHeadRot[2]),
-            FormatFloat(deltaRHandPos[0]), FormatFloat(deltaRHandPos[1]), FormatFloat(deltaRHandPos[2]),
-            FormatFloat(deltaRHandRot[0]), FormatFloat(deltaRHandRot[1]), FormatFloat(deltaRHandRot[2]),
-            FormatFloat(currentLHandPos[0]), FormatFloat(currentLHandPos[1]), FormatFloat(currentLHandPos[2]),
-            FormatFloat(currentLHandRot[0]), FormatFloat(currentLHandRot[1]), FormatFloat(currentLHandRot[2]),
-            FormatFloat(currentHeadPos[0]), FormatFloat(currentHeadPos[1]), FormatFloat(currentHeadPos[2]),
-            FormatFloat(currentHeadRot[0]), FormatFloat(currentHeadRot[1]), FormatFloat(currentHeadRot[2]),
-            FormatFloat(currentRHandPos[0]), FormatFloat(currentRHandPos[1]), FormatFloat(currentRHandPos[2]),
-            FormatFloat(currentRHandRot[0]), FormatFloat(currentRHandRot[1]), FormatFloat(currentRHandRot[2])
+            step.ToString(),
+            FormatFloat(leftHand.DeltaPos.x), FormatFloat(leftHand.DeltaPos.y), FormatFloat(leftHand.DeltaPos.z),
+            FormatFloat(leftHand.DeltaRot.x), FormatFloat(leftHand.DeltaRot.y), FormatFloat(leftHand.DeltaRot.z),
+            FormatFloat(head.DeltaPos.x), FormatFloat(head.DeltaPos.y), FormatFloat(head.DeltaPos.z),
+            FormatFloat(head.DeltaRot.x), FormatFloat(head.DeltaRot.y), FormatFloat(head.DeltaRot.z),
+            FormatFloat(rightHand.DeltaPos.x), FormatFloat(rightHand.DeltaPos.y), FormatFloat(rightHand.DeltaPos.z),
+            FormatFloat(rightHand.DeltaRot.x), FormatFloat(rightHand.DeltaRot.y), FormatFloat(rightHand.DeltaRot.z),
+            FormatFloat(leftHand.CurrentPos.x), FormatFloat(leftHand.CurrentPos.y), FormatFloat(leftHand.CurrentPos.z),
+            FormatFloat(leftHand.CurrentRot.x), FormatFloat(leftHand.CurrentRot.y), FormatFloat(leftHand.CurrentRot.z),
+            FormatFloat(head.CurrentPos.x), FormatFloat(head.CurrentPos.y), FormatFloat(head.CurrentPos.z),
+            FormatFloat(head.CurrentRot.x), FormatFloat(head.CurrentRot.y), FormatFloat(head.CurrentRot.z),
+            FormatFloat(rightHand.CurrentPos.x), FormatFloat(rightHand.CurrentPos.y), FormatFloat(rightHand.CurrentPos.z),
+            FormatFloat(rightHand.CurrentRot.x), FormatFloat(rightHand.CurrentRot.y), FormatFloat(rightHand.CurrentRot.z)
         });
         print(csvData);
         csvWriter.WriteLine(csvData);
@@ -152,103 +132,116 @@ public class MotionDebugging : MonoBehaviour
 
     void registerLeftStep(InputAction.CallbackContext context)
     {
-         step = "left";
+         step = 1;
          stepFeedback.leftStepped = true;
     }
     void registerRightStep(InputAction.CallbackContext context)
     {
-        step = "right";
+        step = 2;
         stepFeedback.rightStepped = true;
     }
     void UpdateData()
     {
         startTime += Time.deltaTime;
-        currentLHandPos = LeftHand.transform.position;
-        deltaLHandPos += currentLHandPos - previousLHandPos;
-        currentHeadPos = Head.transform.position;
-        deltaHeadPos += currentHeadPos - previousHeadPos;
-
-        currentRHandPos = RightHand.transform.position;
-        deltaRHandPos += currentRHandPos - previousRHandPos;
-
-        currentLHandRot = LeftHand.transform.rotation;
-        deltaLHandRot = Quaternion.Inverse(previousLHandRot) * currentLHandRot;
-        currentHeadRot = Head.transform.rotation;
-        deltaHeadRot = Quaternion.Inverse(previousHeadRot) * currentHeadRot;
-        currentRHandRot = RightHand.transform.rotation;
-        deltaRHandRot = Quaternion.Inverse(previousRHandRot) * currentRHandRot;
-
-
+        
+        leftHand.CurrentPos = LeftHand.transform.position;
+        leftHand.DeltaPos += leftHand.CurrentPos - leftHand.PreviousPos;
+        
+        head.CurrentPos = Head.transform.position;
+        head.DeltaPos += head.CurrentPos - head.PreviousPos;
+        
+        rightHand.CurrentPos = RightHand.transform.position;
+        rightHand.DeltaPos += rightHand.CurrentPos - rightHand.PreviousPos;
+        
+        leftHand.CurrentRot = LeftHand.transform.rotation;
+        leftHand.DeltaRot = Quaternion.Inverse(leftHand.PreviousRot) * leftHand.CurrentRot;
+        
+        head.CurrentRot = Head.transform.rotation;
+        head.DeltaRot = Quaternion.Inverse(head.PreviousRot) * head.CurrentRot;
+        
+        rightHand.CurrentRot = RightHand.transform.rotation;
+        rightHand.DeltaRot = Quaternion.Inverse(rightHand.PreviousRot) * rightHand.CurrentRot;
+        
         resetTimer += Time.deltaTime;
         if (resetTimer >= resetInterval)
         {
             if (recordData) WriteDataToCSV();
-            deltaLHandPos = Vector3.zero;
-            deltaHeadPos = Vector3.zero;
-            deltaRHandPos = Vector3.zero;
-
-            deltaLHandRot = Quaternion.identity;
-            deltaHeadRot = Quaternion.identity;
-            deltaRHandRot = Quaternion.identity;
-
+            leftHand.DeltaPos = Vector3.zero;
+            head.DeltaPos = Vector3.zero;
+            rightHand.DeltaPos = Vector3.zero;
+        
+            leftHand.DeltaRot = Quaternion.identity;
+            head.DeltaRot = Quaternion.identity;
+            rightHand.DeltaRot = Quaternion.identity;
+        
             resetTimer = 0f;
-
         }
-
         StringBuilder debugScreenTextBuilder = new StringBuilder();
         debugScreenTextBuilder.Append("Recording: ");
         debugScreenTextBuilder.Append(recordData.ToString());
         debugScreenTextBuilder.AppendLine();
 
         debugScreenTextBuilder.Append("dPosLH: ");
-        debugScreenTextBuilder.Append(deltaLHandPos.ToString("F3"));
+        debugScreenTextBuilder.Append(leftHand.DeltaPos.ToString("F3"));
         debugScreenTextBuilder.AppendLine();
 
         debugScreenTextBuilder.Append("dRotLH: ");
-        debugScreenTextBuilder.Append(deltaLHandRot.ToString("F3"));
+        debugScreenTextBuilder.Append(leftHand.DeltaRot.ToString("F3"));
         debugScreenTextBuilder.AppendLine();
 
         debugScreenTextBuilder.Append("dPosHead: ");
-        debugScreenTextBuilder.Append(deltaHeadPos.ToString("F3"));
+        debugScreenTextBuilder.Append(head.DeltaPos.ToString("F3"));
         debugScreenTextBuilder.AppendLine();
 
         debugScreenTextBuilder.Append("dRotHead: ");
-        debugScreenTextBuilder.Append(deltaHeadRot.ToString("F3"));
+        debugScreenTextBuilder.Append(head.DeltaRot.ToString("F3"));
         debugScreenTextBuilder.AppendLine();
 
         debugScreenTextBuilder.Append("dPosRH: ");
-        debugScreenTextBuilder.Append(deltaRHandPos.ToString("F3"));
+        debugScreenTextBuilder.Append(rightHand.DeltaPos.ToString("F3"));
         debugScreenTextBuilder.AppendLine();
 
         debugScreenTextBuilder.Append("dRotRH: ");
-        debugScreenTextBuilder.Append(deltaRHandRot.ToString("F3"));
+        debugScreenTextBuilder.Append(rightHand.DeltaRot.ToString("F3"));
         debugScreenTextBuilder.AppendLine();
 
         // Add current positions
         debugScreenTextBuilder.AppendLine();
-        
+
         debugScreenTextBuilder.Append("cPosLH: ");
-        debugScreenTextBuilder.Append(currentLHandPos.ToString("F3"));
+        debugScreenTextBuilder.Append(leftHand.CurrentPos.ToString("F3"));
         debugScreenTextBuilder.AppendLine();
 
         debugScreenTextBuilder.Append("cPosHead: ");
-        debugScreenTextBuilder.Append(currentHeadPos.ToString("F3"));
+        debugScreenTextBuilder.Append(head.CurrentPos.ToString("F3"));
         debugScreenTextBuilder.AppendLine();
 
         debugScreenTextBuilder.Append("cPosRH: ");
-        debugScreenTextBuilder.Append(currentRHandPos.ToString("F3"));
+        debugScreenTextBuilder.Append(rightHand.CurrentPos.ToString("F3"));
         debugScreenTextBuilder.AppendLine();
 
         debugScreenText.text = debugScreenTextBuilder.ToString();
 
-        previousLHandPos = currentLHandPos;
-        previousHeadPos = currentHeadPos;
-        previousRHandPos = currentRHandPos;
+        leftHand.PreviousPos = leftHand.CurrentPos;
+        head.PreviousPos = head.CurrentPos;
+        rightHand.PreviousPos = rightHand.CurrentPos;
 
-        previousLHandRot = currentLHandRot;
-        previousHeadRot = currentHeadRot;
-        previousRHandRot = currentRHandRot;
+        leftHand.PreviousRot = leftHand.CurrentRot;
+        head.PreviousRot = head.CurrentRot;
+        rightHand.PreviousRot = rightHand.CurrentRot;
 
-        step = "";
+        step = 0;
     }
+}
+
+
+public class SensorData
+{
+    public Vector3 CurrentPos { get; set; } = Vector3.zero;
+    public Vector3 DeltaPos { get; set; } = Vector3.zero;
+    public Vector3 PreviousPos { get; set; } = Vector3.zero;
+
+    public Quaternion CurrentRot { get; set; } = Quaternion.identity;
+    public Quaternion DeltaRot { get; set; } = Quaternion.identity;
+    public Quaternion PreviousRot { get; set; } = Quaternion.identity;
 }
