@@ -5,21 +5,62 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
+import os
+import glob
 
-# Load data
-data = pd.read_csv('2024011705-0110.csv')
+print("PyTorch version:", torch.__version__)
+# Get a list of all CSV files in the "MLTrainingData/" directory
+csv_files = glob.glob(os.path.join("Assets/MLTrainingData/", "*.csv"))
+
+dfs = []
+
+# Loop through the list of CSV files
+for csv_file in csv_files:
+    # Read each CSV file into a DataFrame and add it to the list
+    df = pd.read_csv(csv_file)
+    dfs.append(df)
+
+# Concatenate all the DataFrames in the list into one DataFrame
+data = pd.concat(dfs, ignore_index=True)
 
 # Preprocess data
 data['step'].fillna('none', inplace=True)
 data['step'] = data['step'].map({'none': 0, 'left': 1, 'right': 2})
+data = data.dropna()
+
+# Calculate relative positions
+data['RelPosLHandHeadX'] = data['cPosLHX'] - data['cPosHeadX']
+data['RelPosLHandHeadY'] = data['cPosLHY'] - data['cPosHeadY']
+data['RelPosLHandHeadZ'] = data['cPosLHZ'] - data['cPosHeadZ']
+
+data['RelPosRHandHeadX'] = data['cPosRHX'] - data['cPosHeadX']
+data['RelPosRHandHeadY'] = data['cPosRHY'] - data['cPosHeadY']
+data['RelPosRHandHeadZ'] = data['cPosRHZ'] - data['cPosHeadZ']
+
+
+column_names = ['dPosLHX', 'dPosLHY', 'dPosLHZ', 
+                'dRotLHX', 'dRotLHY', 'dRotLHZ', 
+                'dPosRHX', 'dPosRHY', 'dPosRHZ', 
+                'dRotRHX', 'dRotRHY', 'dRotRHZ',
+                'dPosHeadX', 'dPosHeadY', 'dPosHeadZ', 
+                'dRotHeadX', 'dRotHeadY', 'dRotHeadZ', 
+                'RelPosLHandHeadX', 'RelPosLHandHeadY', 'RelPosLHandHeadZ',
+                'RelPosRHandHeadX', 'RelPosRHandHeadY', 'RelPosRHandHeadZ']
+
+'''
+# Normalize data
 scaler = MinMaxScaler()
-data.iloc[:, 2:20] = scaler.fit_transform(data.iloc[:, 2:20])  # Only consider dPos and dRot values
+data[column_names] = scaler.fit_transform(data[column_names])
+'''
+
+# Create a new training set with only the relevant attributes
+training_data = data[column_names].copy()
 
 # Create sequences and labels
 sequences = []
 labels = []
-for i in range(0, len(data) - 6):
-    sequences.append(data.iloc[i:i+7, 2:20].values)  # Only consider dPos and dRot values
+for i in range(0, len(training_data) - 6):
+    sequences.append(training_data.iloc[i:i+7].values) 
     steps = data.iloc[i+2:i+5]['step']
     if 1 in steps.values:
         labels.append(1)
@@ -33,11 +74,26 @@ label_counts = Counter(labels)
 
 # Print the total number of sequences and entries
 print(f"Total number of sequences: {len(sequences)}")
-print(f"Total number of entries: {len(data)}")
+print(f"Total number of entries: {len(training_data)}")
 print(f"Number of 'none' sequences: {label_counts[0]}")
 print(f"Number of 'left' sequences: {label_counts[1]}")
 print(f"Number of 'right' sequences: {label_counts[2]}")
 
+# Split data into training set and temporary set using 80-20 split
+X_temp, X_test, y_temp, y_test = train_test_split(sequences, labels, test_size=0.2, random_state=42)
+
+# Split the temporary set into validation set and final training set using 80-20 split
+X_train, X_val, y_train, y_val = train_test_split(X_temp, y_temp, test_size=0.2, random_state=42)
+
+# Convert to tensors
+X_train = torch.tensor(X_train, dtype=torch.float)
+y_train = torch.tensor(y_train, dtype=torch.long)
+X_val = torch.tensor(X_val, dtype=torch.float)
+y_val = torch.tensor(y_val, dtype=torch.long)
+X_test = torch.tensor(X_test, dtype=torch.float)
+y_test = torch.tensor(y_test, dtype=torch.long)
+
+'''
 # Split data
 X_train, X_test, y_train, y_test = train_test_split(sequences, labels, test_size=0.2, random_state=42)
 
@@ -46,7 +102,7 @@ X_train = torch.tensor(X_train, dtype=torch.float)
 y_train = torch.tensor(y_train, dtype=torch.long)
 X_test = torch.tensor(X_test, dtype=torch.float)
 y_test = torch.tensor(y_test, dtype=torch.long)
-
+'''
 # Define model
 class LSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, num_classes):
@@ -63,18 +119,40 @@ class LSTM(nn.Module):
         out = self.fc(out[:, -1, :])
         return out
 
-model = LSTM(input_size=18, hidden_size=50, num_layers=2, num_classes=3)
+model = LSTM(input_size=24, hidden_size=50, num_layers=2, num_classes=3)
 
 # Train model
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-for epoch in range(100):
+best_val_loss = float("Inf") 
+epochs_no_improve = 0
+n_epochs_stop = 5
+
+for epoch in range(1000):  # Increase to 1000 epochs
+    # Training
+    model.train()
     outputs = model(X_train)
     loss = criterion(outputs, y_train)
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
+
+    # Evaluation on validation set
+    model.eval()
+    with torch.no_grad():
+        outputs_val = model(X_val)
+        val_loss = criterion(outputs_val, y_val)
+
+    if val_loss < best_val_loss:
+        best_val_loss = val_loss
+    else:
+        epochs_no_improve += 1
+        if epochs_no_improve == n_epochs_stop:
+            print('Optimal fitting reached. Stopping!')
+            break
+
+
 
 
 # Evaluate model
