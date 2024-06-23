@@ -1,5 +1,7 @@
 from collections import Counter
 from datetime import datetime
+import random
+from sklearn.utils import compute_class_weight
 import torch
 import torch.nn as nn
 import pandas as pd
@@ -8,6 +10,13 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 import os
 import glob
+
+seed = 42  # Choose a seed
+
+# Set the random seed for numpy, torch and python's built-in random module
+np.random.seed(seed)
+torch.manual_seed(seed)
+random.seed(seed)
 
 print("PyTorch version:", torch.__version__)
 
@@ -19,6 +28,8 @@ csv_files = glob.glob(os.path.join("Assets/MLTrainingData/", "*.csv"))
 # Initialize lists to store sequences and labels
 sequences = []
 labels = []
+sequences_eval = []
+labels_eval = []
 
 # Loop through the list of CSV files
 for csv_file in csv_files:
@@ -37,8 +48,7 @@ for csv_file in csv_files:
     df['RelPosRHandHeadY'] = df['cPosRHY'] - df['cPosHeadY']
     df['RelPosRHandHeadZ'] = df['cPosRHZ'] - df['cPosHeadZ']
 
-    
-    sequenceInputs = ['dPosLHX', 'dPosLHY', 'dPosLHZ', 
+    sequenceFeatures = ['dPosLHX', 'dPosLHY', 'dPosLHZ', 
                     'dRotLHX', 'dRotLHY', 'dRotLHZ', 
                     'dPosRHX', 'dPosRHY', 'dPosRHZ', 
                     'dRotRHX', 'dRotRHY', 'dRotRHZ',
@@ -48,27 +58,37 @@ for csv_file in csv_files:
                     'RelPosRHandHeadX', 'RelPosRHandHeadY', 'RelPosRHandHeadZ']
 
     # Create a new training set with only the relevant attributes
-    training_data = df[sequenceInputs].copy()
-
+    training_data = df[sequenceFeatures].copy()
+    filename = os.path.basename(csv_file)
     # Create sequences and labels for each file
     for i in range(0, len(training_data) - 6):
-        sequences.append(training_data.iloc[i:i+7].values) 
+        sequence = training_data.iloc[i:i+7].values
         steps = df.iloc[i+2:i+5]['step']
         if 1 in steps.values:
-            labels.append(1)
+            label = 1
         elif 2 in steps.values:
-            labels.append(2)
+            label = 2
         else:
-            labels.append(0)
+            label = 0
 
-# Split data into training set and temporary set using 80-20 split
-X_train, X_test, y_train, y_test = train_test_split(sequences, labels, test_size=0.2, random_state=42)
+        # If the CSV file name starts with 'eval_', append to evaluation sets
+        if filename.startswith('eval_'):
+            sequences_eval.append(sequence)
+            labels_eval.append(label)
+        else:
+            sequences.append(sequence)
+            labels.append(label)
+
+sequences = np.array(sequences)
+labels = np.array(labels)
+sequences_eval = np.array(sequences_eval)
+labels_eval = np.array(labels_eval)
 
 # Convert to tensors
-X_train = torch.tensor(np.array(X_train), dtype=torch.float)
-y_train = torch.tensor(np.array(y_train), dtype=torch.long)
-X_test = torch.tensor(np.array(X_test), dtype=torch.float)
-y_test = torch.tensor(np.array(y_test), dtype=torch.long)
+X_train = torch.tensor(sequences, dtype=torch.float)
+y_train = torch.tensor(labels, dtype=torch.long)
+X_test = torch.tensor(sequences_eval, dtype=torch.float)
+y_test = torch.tensor(labels_eval, dtype=torch.long)
 
 # Define model
 class LSTM(nn.Module):
@@ -94,7 +114,7 @@ label_counts = Counter(labels)
 none_freq = label_counts[0]/len(sequences)*100
 left_freq = label_counts[1]/len(sequences)*100
 right_freq = label_counts[2]/len(sequences)*100
-
+"""
 # Define class weights
 weights = [1.0 / none_freq, 1.0 / left_freq / 1.5, 1.0 / right_freq / 1.5]  # Adjust as necessary
 total = sum(weights)
@@ -103,7 +123,13 @@ weights = [weight / total for weight in weights]
 print(f"Class weights: {weights}")
 
 class_weights = torch.FloatTensor(weights).to(device)
+"""
+# Calculate class weights
+class_weights = compute_class_weight('balanced', classes=np.unique(labels), y=labels)
+class_weights = torch.tensor(class_weights, dtype=torch.float)
 
+# Define a weighted loss function
+criterion = nn.CrossEntropyLoss(weight=class_weights)
 
 # Train model
 criterion = nn.CrossEntropyLoss(weight=class_weights)
@@ -113,10 +139,15 @@ best_val_loss = float("Inf")
 epochs_no_improve = 0
 n_epochs_stop = 100  # Stop training if validation loss does not improve after 100 epochs
 
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+# Initialize variables
+best_accuracy = 0.0
+best_epoch = 0
+epochs_since_improvement = 0
+n_stop_epochs = 10  # Number of epochs to stop training if the accuracy does not improve
+best_model_state = None  # To store the state of the best model
 
-# ...
 
+# 1st approach
 for epoch in range(1000):  # Increase to 1000 epochs
     # Training
     model.train()
@@ -139,24 +170,63 @@ for epoch in range(1000):  # Increase to 1000 epochs
     y_test_np = y_test.cpu().numpy()
     predicted_np = predicted.cpu().numpy()
 
-    ## Calculate metrics
-    #accuracy = accuracy_score(y_test_np, predicted_np)
-    #precision = precision_score(y_test_np, predicted_np, average='weighted')
-    #recall = recall_score(y_test_np, predicted_np, average='weighted')
-    #f1 = f1_score(y_test_np, predicted_np, average='weighted')
-
-    #print(f'Epoch: {epoch+1}, Loss: {loss.item()}, Val Loss: {val_loss.item()}, Accuracy: {accuracy}, Precision: {precision}, Recall: {recall}, F1 Score: {f1}')
 
     if val_loss < best_val_loss:
         best_val_loss = val_loss
+        epochs_no_improve = 0
+        best_model_state = model.state_dict()
     else:
         epochs_no_improve += 1
         if epochs_no_improve == n_epochs_stop:
             print(f'Optimal fitting reached. Stopping! (Epoch: {epoch+1})')
             break
 
+model.load_state_dict(best_model_state)
 
 
+
+"""
+# 2nd approach
+for epoch in range(1000):  # Number of epochs
+    model.train()
+    optimizer.zero_grad()
+    outputs = model(X_train)
+    loss = criterion(outputs, y_train)
+    loss.backward()
+    optimizer.step()
+
+    # Evaluate the model every epoch
+    model.eval()
+    with torch.no_grad():
+        outputs = model(X_test)
+        _, predicted = torch.max(outputs, 1)
+    
+        # Calculate the accuracy for all classes
+        current_accuracy = accuracy_score(y_test, predicted)
+        if current_accuracy > best_accuracy:
+            best_accuracy = current_accuracy
+            best_epoch = epoch
+            epochs_since_improvement = 0  # Reset the counter
+            best_model_state = model.state_dict()  # Save the current model state
+        else:
+            epochs_since_improvement += 1  # Increment the counter
+
+    # If the accuracy did not improve in the last 100 epochs, stop the training
+    if epochs_since_improvement == n_stop_epochs:
+        print(f'Training stopped at epoch {epoch}. Best accuracy: {best_accuracy} at epoch {best_epoch}\n')
+        model.load_state_dict(best_model_state)  # Load the best model state
+
+        # Evaluate the model with the best state
+        model.eval()
+        with torch.no_grad():
+            outputs = model(X_test)
+            _, predicted = torch.max(outputs, 1)
+
+        # Print the classification report
+        print(classification_report(y_test, predicted, target_names=['None', 'Left', 'Right']))
+
+        break
+"""
 
 # Evaluate model
 model.eval()
@@ -216,6 +286,4 @@ torch.onnx.export(model,               # model being run
                   opset_version=10,    # the ONNX version to export the model to
                   do_constant_folding=True,  # whether to execute constant folding for optimization
                   input_names = ['sequence'],   # the model's input names
-                  output_names = ['output'], # the model's output names
-                  dynamic_axes={'sequence' : {0 : 'batch_size'},    # variable length axes
-                                'output' : {0 : 'batch_size'}})
+                  output_names = ['output']) # the model's output names

@@ -13,13 +13,43 @@ public class ReadMotion : MonoBehaviour
     private Replay replay;
 
     // Start is called before the first frame update
-    void Start()
+    public void PlayCSV(string file_path)
     {
-        replay = new Replay(@"C:\Users\zidm\Repo\VR-Motion-Interpreter\2024011705-0110.csv");
+        replay = new Replay(file_path);
         StartCoroutine(ReplayData());
     }
 
-    // Update is called once per frame
+    public void StopCSV()
+    {
+        StopAllCoroutines();
+    }
+
+    public void PlayLastRecorded()
+    {
+        string[] csvFiles = Directory.GetFiles("Assets/MLTrainingData", "*.csv");
+        string latestFile = string.Empty;
+        DateTime latestCreationTime = DateTime.MinValue;
+
+        foreach (string file in csvFiles)
+        {
+            DateTime creationTime = File.GetCreationTime(file);
+            if (creationTime > latestCreationTime)
+            {
+                latestCreationTime = creationTime;
+                latestFile = file;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(latestFile))
+        {
+            PlayCSV(latestFile);
+        }
+        else
+        {
+            Debug.Log("No CSV files found in Assets/MLTrainingData folder.");
+        }
+    }
+    
     IEnumerator ReplayData()
     {
         foreach (ReplayFrame frame in replay.frames)
@@ -66,13 +96,13 @@ public class ReplayFrame
     public Quaternion headRot;
 
     public ReplayFrame(string[] values)
-{
-    // Updated indices to match the new structure starting at index 21
-    leftHandPos = new Vector3(float.Parse(values[20], CultureInfo.InvariantCulture), float.Parse(values[21], CultureInfo.InvariantCulture), float.Parse(values[22], CultureInfo.InvariantCulture));
-    leftHandRot = new Quaternion(float.Parse(values[23], CultureInfo.InvariantCulture), float.Parse(values[24], CultureInfo.InvariantCulture), float.Parse(values[25], CultureInfo.InvariantCulture), 1f); // W value set to 1f assuming unit quaternion
-    headPos = new Vector3(float.Parse(values[26], CultureInfo.InvariantCulture), float.Parse(values[27], CultureInfo.InvariantCulture), float.Parse(values[28], CultureInfo.InvariantCulture));
-    headRot = new Quaternion(float.Parse(values[29], CultureInfo.InvariantCulture), float.Parse(values[30], CultureInfo.InvariantCulture), float.Parse(values[31], CultureInfo.InvariantCulture), 1f); // W value set to 1f assuming unit quaternion
-    rightHandPos = new Vector3(float.Parse(values[32], CultureInfo.InvariantCulture), float.Parse(values[33], CultureInfo.InvariantCulture), float.Parse(values[34], CultureInfo.InvariantCulture));
-    rightHandRot = new Quaternion(float.Parse(values[35], CultureInfo.InvariantCulture), float.Parse(values[36], CultureInfo.InvariantCulture), float.Parse(values[37], CultureInfo.InvariantCulture), 1f); // W value set to 1f assuming unit quaternion
-}
+    {
+        // Updated indices to match the new structure starting at index 21
+        leftHandPos = new Vector3(float.Parse(values[20], CultureInfo.InvariantCulture), float.Parse(values[21], CultureInfo.InvariantCulture), float.Parse(values[22], CultureInfo.InvariantCulture));
+        leftHandRot = new Quaternion(float.Parse(values[23], CultureInfo.InvariantCulture), float.Parse(values[24], CultureInfo.InvariantCulture), float.Parse(values[25], CultureInfo.InvariantCulture), 1f); // W value set to 1f assuming unit quaternion
+        headPos = new Vector3(float.Parse(values[26], CultureInfo.InvariantCulture), float.Parse(values[27], CultureInfo.InvariantCulture), float.Parse(values[28], CultureInfo.InvariantCulture));
+        headRot = new Quaternion(float.Parse(values[29], CultureInfo.InvariantCulture), float.Parse(values[30], CultureInfo.InvariantCulture), float.Parse(values[31], CultureInfo.InvariantCulture), 1f); // W value set to 1f assuming unit quaternion
+        rightHandPos = new Vector3(float.Parse(values[32], CultureInfo.InvariantCulture), float.Parse(values[33], CultureInfo.InvariantCulture), float.Parse(values[34], CultureInfo.InvariantCulture));
+        rightHandRot = new Quaternion(float.Parse(values[35], CultureInfo.InvariantCulture), float.Parse(values[36], CultureInfo.InvariantCulture), float.Parse(values[37], CultureInfo.InvariantCulture), 1f); // W value set to 1f assuming unit quaternion
+    }
 }

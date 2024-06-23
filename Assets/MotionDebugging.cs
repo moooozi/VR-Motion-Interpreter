@@ -10,6 +10,7 @@ using UnityEngine.PlayerLoop;
 using System;
 using System.Globalization;
 using UnityEngine.InputSystem;
+using Unity.VisualScripting.FullSerializer;
 
 
 public class MotionDebugging : MonoBehaviour
@@ -19,28 +20,35 @@ public class MotionDebugging : MonoBehaviour
     [SerializeField] GameObject RightHand;
     [SerializeField] GameObject Head;
 
+    [SerializeField] GameObject Sentis;
+
     [SerializeField] GameObject DebugScreen;
     [SerializeField] GameObject StepFeedbackScreen;
     [SerializeField] GameObject CameraOffset;
 
-    private bool recordData = false;
+    [SerializeField] private bool recordingDataIsOn = false;
+    [SerializeField] private bool recognitionIsOn = false;
+    
 
     private bool modelRunning = false;
     private float startTime;
 
-    private SensorData leftHand = new SensorData();
-    private SensorData rightHand = new SensorData();
-    private SensorData head = new SensorData();
+    private SensorData leftHand = new();
+    private SensorData rightHand = new();
+    private SensorData head = new();
+
+    private MLModelStepRecogize mlModelStepRecogize;
 
     private StepFeedback stepFeedback;
     private int step = 0;
     TextMeshProUGUI debugScreenText;
 
-    [SerializeField] float resetInterval = 0.05f; // Reset interval in seconds
-
+    [SerializeField] int recordingFPS = 20; 
     private int finishedEntries = 0;
 
-    private FullDataFrame[] recordedData;
+    private MLSequence mLSequence = new MLSequence(7);
+
+    private List<FullDataFrame> recordedData = new List<FullDataFrame>();
     private StreamWriter csvWriter;
 
     [SerializeField] InputActionReference startRecordingAction;
@@ -54,11 +62,7 @@ public class MotionDebugging : MonoBehaviour
         leftStepAction.action.started += registerLeftStep;
         rightStepAction.action.started += registerRightStep;
         stepFeedback = StepFeedbackScreen.GetComponent<StepFeedback>();
-    }
-
-    void Update()
-    {
-        UpdateData();
+        mlModelStepRecogize = Sentis.GetComponent<MLModelStepRecogize>();
     }
 
     /// <summary>
@@ -87,7 +91,8 @@ public class MotionDebugging : MonoBehaviour
         });
         allLines.AppendLine(header);
 
-        for (int i = 0; i < recordedData.Length; i++)
+        // Skip the first and last second of data
+        for (int i = recordingFPS; i < recordedData.Count - recordingFPS; i++)
         {
             FullDataFrame frame = recordedData[i];
 
@@ -110,7 +115,7 @@ public class MotionDebugging : MonoBehaviour
             });
             allLines.AppendLine(line);
         }
-
+        recordedData.Clear();
         csvWriter.Write(allLines.ToString());
     }
 
@@ -120,20 +125,33 @@ public class MotionDebugging : MonoBehaviour
     }
 
 
-    void toggleRecording(InputAction.CallbackContext context)
+    public void toggleRecording(InputAction.CallbackContext context)
     {
-        recordData = !recordData;
-        if (!recordData){
+        recordingDataIsOn = !recordingDataIsOn;
+        if (!recordingDataIsOn){
             WriteDataToCSV();
             return;
         } 
         // If not recording, start recording
         startTime = 0f;
+        finishedEntries = 0;
 
         string timestamp = DateTime.Now.ToString("yyyyMMddHH-mmss");
-        string csvFilePath = $"{timestamp}.csv";
+        string csvFilePath = $"Assets/MLTrainingData/{timestamp}.csv";
         csvWriter = new StreamWriter(csvFilePath, false);
     }
+
+    public void toggleRecognition(InputAction.CallbackContext context)
+    {
+        recognitionIsOn = !recognitionIsOn;
+        
+        if (!recognitionIsOn){
+            return;
+        }
+        // Before starting the recognition
+        mLSequence.Clear();
+    }
+
 
     void registerLeftStep(InputAction.CallbackContext context)
     {
@@ -145,24 +163,48 @@ public class MotionDebugging : MonoBehaviour
         step = 2;
         stepFeedback.rightStepped = true;
     }
-    void UpdateData()
+
+    void updateRecognition()
     {
-        startTime += Time.deltaTime;
-    
+        mLSequence.AddFrame(new MLDataFrame(leftHand.CurrentPos, leftHand.CurrentRot, head.CurrentPos, head.CurrentRot, rightHand.CurrentPos, rightHand.CurrentRot, leftHand.DeltaPos, rightHand.DeltaPos));
+
+        if (!mLSequence.IsFull()) {
+            return;
+        }
+        // to save compute power, only run the model once every 2 frames
+        if (mLSequence.oddEven) {
+            return;
+        }
+        // Run the model
+        mlModelStepRecogize.ExecuteModel(mLSequence.GetMLSequence());
+    }
+
+    void Update()
+    {
         leftHand.UpdateSensorData(LeftHand.transform.position, LeftHand.transform.rotation);
         head.UpdateSensorData(Head.transform.position, Head.transform.rotation);
         rightHand.UpdateSensorData(RightHand.transform.position, RightHand.transform.rotation);
     
-        if (startTime / finishedEntries >= resetInterval)
-        {
-            if (recordData) {
-                recordedData[finishedEntries] = new FullDataFrame(startTime, step, leftHand, rightHand, head);
-            }
-            finishedEntries += 1;
+        if (recordingDataIsOn) {
+            startTime += Time.deltaTime;
+            if ((startTime / finishedEntries >= 1.0f / recordingFPS) || finishedEntries == 0) {
+                finishedEntries++;
+                recordedData.Add(new FullDataFrame(startTime, step, new SensorData(leftHand), new SensorData(rightHand), new SensorData(head)));
+                step = 0;
+            }        
         }
+        if (recognitionIsOn)
+            updateRecognition();
+
+
         StringBuilder debugScreenTextBuilder = new StringBuilder();
+
+        debugScreenTextBuilder.Append("FPS: ");
+        debugScreenTextBuilder.Append(1 / Time.deltaTime);
+        debugScreenTextBuilder.AppendLine();
+
         debugScreenTextBuilder.Append("Recording: ");
-        debugScreenTextBuilder.Append(recordData.ToString());
+        debugScreenTextBuilder.Append(recordingDataIsOn.ToString());
         debugScreenTextBuilder.AppendLine();
     
         debugScreenTextBuilder.Append("dPosLH: ");
@@ -206,7 +248,6 @@ public class MotionDebugging : MonoBehaviour
     
         debugScreenText.text = debugScreenTextBuilder.ToString();
     
-        step = 0;
     }
 }
 
@@ -219,7 +260,21 @@ public class SensorData
     public Quaternion CurrentRot { get; set; } = Quaternion.identity;
     public Quaternion DeltaRot { get; set; } = Quaternion.identity;
     public Quaternion PreviousRot { get; set; } = Quaternion.identity;
+    
+    // Parameterless constructor
+    public SensorData() { }
+    
+    // Copy constructor
+    public SensorData(SensorData original)
+    {
+        CurrentPos = original.CurrentPos;
+        DeltaPos = original.DeltaPos;
+        PreviousPos = original.PreviousPos;
 
+        CurrentRot = original.CurrentRot;
+        DeltaRot = original.DeltaRot;
+        PreviousRot = original.PreviousRot;
+    }
     public void UpdateSensorData(Vector3 currentPos, Quaternion currentRot)
     {
         PreviousPos = CurrentPos;
@@ -285,6 +340,8 @@ public class MLSequence
 {
     private List<MLDataFrame> frames;
     private int maxSize;
+    public int frameIndex = 0;
+    public bool oddEven = false;
 
     public MLSequence(int maxSize)
     {
@@ -307,6 +364,9 @@ public class MLSequence
         {
             frames.RemoveAt(0);
         }
+        oddEven = !oddEven;
+        if (frameIndex < maxSize) frameIndex++;
+        else                      frameIndex = 0;
     }
 
     public List<MLDataFrame> GetFrames()
@@ -337,5 +397,10 @@ public class MLSequence
         }
         // Return the prepared data
         return data;
+    }
+    public void Clear()
+    {
+        frames.Clear();
+        frameIndex = 0;
     }
 }
