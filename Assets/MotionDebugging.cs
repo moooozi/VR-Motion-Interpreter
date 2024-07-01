@@ -11,6 +11,7 @@ using System;
 using System.Globalization;
 using UnityEngine.InputSystem;
 using Unity.VisualScripting.FullSerializer;
+using System.Linq;
 
 
 public class MotionDebugging : MonoBehaviour
@@ -28,9 +29,7 @@ public class MotionDebugging : MonoBehaviour
 
     [SerializeField] private bool recordingDataIsOn = false;
     [SerializeField] private bool recognitionIsOn = false;
-    
 
-    private bool modelRunning = false;
     private float startTime;
 
     private SensorData leftHand = new();
@@ -38,6 +37,8 @@ public class MotionDebugging : MonoBehaviour
     private SensorData head = new();
 
     private MLModelStepRecogize mlModelStepRecogize;
+
+    private float[] recognitionResults = new float[3];
 
     private StepFeedback stepFeedback;
     private int step = 0;
@@ -125,8 +126,7 @@ public class MotionDebugging : MonoBehaviour
     }
 
 
-    public void toggleRecording(InputAction.CallbackContext context)
-    {
+    public void toggleRecording(InputAction.CallbackContext context)   {
         recordingDataIsOn = !recordingDataIsOn;
         if (!recordingDataIsOn){
             WriteDataToCSV();
@@ -141,17 +141,27 @@ public class MotionDebugging : MonoBehaviour
         csvWriter = new StreamWriter(csvFilePath, false);
     }
 
+    public void toggleRecording() {
+        toggleRecording(new InputAction.CallbackContext());
+    }
+
     public void toggleRecognition(InputAction.CallbackContext context)
     {
         recognitionIsOn = !recognitionIsOn;
         
         if (!recognitionIsOn){
+
             return;
         }
         // Before starting the recognition
         mLSequence.Clear();
+        startTime = 0f;
+        finishedEntries = 0;
     }
 
+    public void toggleRecognition() {
+        toggleRecognition(new InputAction.CallbackContext()); 
+    }
 
     void registerLeftStep(InputAction.CallbackContext context)
     {
@@ -166,7 +176,16 @@ public class MotionDebugging : MonoBehaviour
 
     void updateRecognition()
     {
-        mLSequence.AddFrame(new MLDataFrame(leftHand.CurrentPos, leftHand.CurrentRot, head.CurrentPos, head.CurrentRot, rightHand.CurrentPos, rightHand.CurrentRot, leftHand.DeltaPos, rightHand.DeltaPos));
+        startTime += Time.deltaTime;
+        if ((startTime / finishedEntries >= 1.0f / recordingFPS) || finishedEntries == 0) {
+            finishedEntries++;
+            mLSequence.AddFrame(new MLDataFrame(
+                leftHand.DeltaPos, leftHand.DeltaRot, 
+                head.DeltaPos, head.DeltaRot, 
+                rightHand.DeltaPos, rightHand.DeltaRot, 
+                leftHand.CurrentPos - head.CurrentPos, 
+                rightHand.CurrentPos - head.CurrentPos));        
+        }
 
         if (!mLSequence.IsFull()) {
             return;
@@ -176,7 +195,13 @@ public class MotionDebugging : MonoBehaviour
             return;
         }
         // Run the model
-        mlModelStepRecogize.ExecuteModel(mLSequence.GetMLSequence());
+        recognitionResults = mlModelStepRecogize.ExecuteModel(mLSequence.GetMLSequence());
+        // Find the index of the highest value
+        int highestIndex = Array.IndexOf(recognitionResults, recognitionResults.Max());
+        
+        // Set the step feedback
+        stepFeedback.leftStepped = highestIndex == 1;
+        stepFeedback.rightStepped = highestIndex == 2;
     }
 
     void Update()
@@ -205,6 +230,14 @@ public class MotionDebugging : MonoBehaviour
 
         debugScreenTextBuilder.Append("Recording: ");
         debugScreenTextBuilder.Append(recordingDataIsOn.ToString());
+        debugScreenTextBuilder.AppendLine();
+
+        debugScreenTextBuilder.Append("Recognition: ");
+        debugScreenTextBuilder.Append(recognitionIsOn.ToString());
+        debugScreenTextBuilder.AppendLine();
+
+        debugScreenTextBuilder.Append("Recognition Data: ");
+        debugScreenTextBuilder.Append(string.Join(", ", recognitionResults));
         debugScreenTextBuilder.AppendLine();
     
         debugScreenTextBuilder.Append("dPosLH: ");
@@ -385,13 +418,13 @@ public class MLSequence
             // Extract the component values from each Vector3 and Quaternion
             data[i] = new float[]
             {
-                frames[i].LeftHandPos.x, frames[i].LeftHandPos.y, frames[i].LeftHandPos.z,
-                frames[i].LeftHandRot.x, frames[i].LeftHandRot.y, frames[i].LeftHandRot.z, frames[i].LeftHandRot.w,
-                frames[i].RightHandPos.x, frames[i].RightHandPos.y, frames[i].RightHandPos.z,
-                frames[i].RightHandRot.x, frames[i].RightHandRot.y, frames[i].RightHandRot.z, frames[i].RightHandRot.w,
-                frames[i].HeadPos.x, frames[i].HeadPos.y, frames[i].HeadPos.z,
-                frames[i].HeadRot.x, frames[i].HeadRot.y, frames[i].HeadRot.z, frames[i].HeadRot.w,
-                frames[i].RelLeftHandPos.x, frames[i].RelLeftHandPos.y, frames[i].RelLeftHandPos.z,
+                frames[i].LeftHandPos.x    , frames[i].LeftHandPos.y    , frames[i].LeftHandPos.z,
+                frames[i].LeftHandRot.x    , frames[i].LeftHandRot.y    , frames[i].LeftHandRot.z,
+                frames[i].RightHandPos.x   , frames[i].RightHandPos.y   , frames[i].RightHandPos.z,
+                frames[i].RightHandRot.x   , frames[i].RightHandRot.y   , frames[i].RightHandRot.z,
+                frames[i].HeadPos.x        , frames[i].HeadPos.y        , frames[i].HeadPos.z,
+                frames[i].HeadRot.x        , frames[i].HeadRot.y        , frames[i].HeadRot.z,
+                frames[i].RelLeftHandPos.x , frames[i].RelLeftHandPos.y , frames[i].RelLeftHandPos.z,
                 frames[i].RelRightHandPos.x, frames[i].RelRightHandPos.y, frames[i].RelRightHandPos.z
             };
         }

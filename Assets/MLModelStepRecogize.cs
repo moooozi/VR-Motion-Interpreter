@@ -2,15 +2,12 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Sentis;
+using Unity.Sentis.Layers;
 using UnityEngine;
 
 public class MLModelStepRecogize : MonoBehaviour
 {
     [SerializeField] ModelAsset modelAsset;
-
-    [SerializeField] GameObject LeftHand;
-    [SerializeField] GameObject RightHand;
-    [SerializeField] GameObject Head;
 
     [SerializeField] float[] results;
 
@@ -26,7 +23,9 @@ public class MLModelStepRecogize : MonoBehaviour
         //motionDebugging = GetComponent<MotionDebugging>();
         //runtimeModel = ModelLoader.Load(modelAsset);
         //worker = runtimeModel.CreateWorker(runtimeModel);
-        Model runtimeModel = ModelLoader.Load(modelAsset);
+        runtimeModel = ModelLoader.Load(modelAsset);
+
+        worker = WorkerFactory.CreateWorker(BackendType.CPU, runtimeModel);
 
         List<Model.Input> inputs = runtimeModel.inputs;
 
@@ -46,8 +45,9 @@ public class MLModelStepRecogize : MonoBehaviour
     
 
 
-    public int ExecuteModel(float[][] input)
+    public float[] ExecuteModel(float[][] input)
     {
+        inputTensor?.Dispose();
         // Flatten the 2D array into a 1D array using LINQ
         float[] data = input.SelectMany(subArray => subArray).ToArray();
 
@@ -55,21 +55,18 @@ public class MLModelStepRecogize : MonoBehaviour
         TensorShape shape = new TensorShape(1, 7, 24);
 
         // Create a new tensor from the array
-        TensorFloat tensor = new TensorFloat(shape, data);
-
-        // Create an inference engine (a worker)
-        IWorker worker = WorkerFactory.CreateWorker(BackendType.GPUCompute, runtimeModel);
+        inputTensor = new TensorFloat(shape, data);
         
         // Run the model with the tensor as input
         worker.Execute(inputTensor);
 
         // Get the output tensor
-        TensorInt outputTensor = worker.PeekOutput() as TensorInt;
+        TensorFloat outputTensor = worker.PeekOutput() as TensorFloat;
+        outputTensor.CompleteOperationsAndDownload();
 
-        // Print the output tensor
-        Debug.Log(outputTensor);
-
-        return outputTensor == null ? -1 : outputTensor[0];
+        // Get the output data as a read-only array
+        float[] outputData = outputTensor.ToReadOnlyArray();
+        return outputData;
     }
 
     void Update()
