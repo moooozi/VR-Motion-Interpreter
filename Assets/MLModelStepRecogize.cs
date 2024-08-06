@@ -25,7 +25,7 @@ public class MLModelStepRecogize : MonoBehaviour
         //worker = runtimeModel.CreateWorker(runtimeModel);
         runtimeModel = ModelLoader.Load(modelAsset);
 
-        worker = WorkerFactory.CreateWorker(BackendType.CPU, runtimeModel);
+        worker = WorkerFactory.CreateWorker(BackendType.GPUCompute, runtimeModel);
 
         List<Model.Input> inputs = runtimeModel.inputs;
 

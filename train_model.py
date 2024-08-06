@@ -6,8 +6,6 @@ import torch
 import torch.nn as nn
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
 import os
 import glob
 
@@ -114,16 +112,7 @@ label_counts = Counter(labels)
 none_freq = label_counts[0]/len(sequences)*100
 left_freq = label_counts[1]/len(sequences)*100
 right_freq = label_counts[2]/len(sequences)*100
-"""
-# Define class weights
-weights = [1.0 / none_freq, 1.0 / left_freq / 1.5, 1.0 / right_freq / 1.5]  # Adjust as necessary
-total = sum(weights)
-# Normalize weights so they sum to 1
-weights = [weight / total for weight in weights]
-print(f"Class weights: {weights}")
 
-class_weights = torch.FloatTensor(weights).to(device)
-"""
 # Calculate class weights
 class_weights = compute_class_weight('balanced', classes=np.unique(labels), y=labels)
 class_weights = torch.tensor(class_weights, dtype=torch.float)
@@ -175,6 +164,7 @@ for epoch in range(1000):  # Increase to 1000 epochs
         best_val_loss = val_loss
         epochs_no_improve = 0
         best_model_state = model.state_dict()
+        print(f'Epoch {epoch+1} - Validation loss decreased ({val_loss:.6f}')
     else:
         epochs_no_improve += 1
         if epochs_no_improve == n_epochs_stop:
@@ -183,50 +173,6 @@ for epoch in range(1000):  # Increase to 1000 epochs
 
 model.load_state_dict(best_model_state)
 
-
-
-"""
-# 2nd approach
-for epoch in range(1000):  # Number of epochs
-    model.train()
-    optimizer.zero_grad()
-    outputs = model(X_train)
-    loss = criterion(outputs, y_train)
-    loss.backward()
-    optimizer.step()
-
-    # Evaluate the model every epoch
-    model.eval()
-    with torch.no_grad():
-        outputs = model(X_test)
-        _, predicted = torch.max(outputs, 1)
-    
-        # Calculate the accuracy for all classes
-        current_accuracy = accuracy_score(y_test, predicted)
-        if current_accuracy > best_accuracy:
-            best_accuracy = current_accuracy
-            best_epoch = epoch
-            epochs_since_improvement = 0  # Reset the counter
-            best_model_state = model.state_dict()  # Save the current model state
-        else:
-            epochs_since_improvement += 1  # Increment the counter
-
-    # If the accuracy did not improve in the last 100 epochs, stop the training
-    if epochs_since_improvement == n_stop_epochs:
-        print(f'Training stopped at epoch {epoch}. Best accuracy: {best_accuracy} at epoch {best_epoch}\n')
-        model.load_state_dict(best_model_state)  # Load the best model state
-
-        # Evaluate the model with the best state
-        model.eval()
-        with torch.no_grad():
-            outputs = model(X_test)
-            _, predicted = torch.max(outputs, 1)
-
-        # Print the classification report
-        print(classification_report(y_test, predicted, target_names=['None', 'Left', 'Right']))
-
-        break
-"""
 
 # Evaluate model
 model.eval()

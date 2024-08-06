@@ -15,7 +15,7 @@ public class StepFeedback : MonoBehaviour
     [SerializeField] public bool leftStepped;
     bool _rightStepped = false;
     bool _leftStepped = false;
-    [SerializeField] float stepTimer = 0.2f;
+    [SerializeField] float stepTimer = 0.1f;
     float _rightStepTimer = 0.0f;
     float _leftStepTimer = 0.0f;
 

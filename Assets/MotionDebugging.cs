@@ -140,9 +140,10 @@ public class MotionDebugging : MonoBehaviour
         string csvFilePath = $"Assets/MLTrainingData/{timestamp}.csv";
         csvWriter = new StreamWriter(csvFilePath, false);
     }
-
-    public void toggleRecording() {
+    
+    public bool toggleRecording() {
         toggleRecording(new InputAction.CallbackContext());
+        return recordingDataIsOn;
     }
 
     public void toggleRecognition(InputAction.CallbackContext context)
@@ -159,17 +160,24 @@ public class MotionDebugging : MonoBehaviour
         finishedEntries = 0;
     }
 
-    public void toggleRecognition() {
-        toggleRecognition(new InputAction.CallbackContext()); 
+    public bool toggleRecognition() {
+        toggleRecognition(new InputAction.CallbackContext());
+        return recognitionIsOn;
     }
 
     void registerLeftStep(InputAction.CallbackContext context)
     {
+        if (!recordingDataIsOn) {
+            return;
+        }
          step = 1;
          stepFeedback.leftStepped = true;
     }
     void registerRightStep(InputAction.CallbackContext context)
     {
+        if (!recordingDataIsOn) {
+            return;
+        }
         step = 2;
         stepFeedback.rightStepped = true;
     }
