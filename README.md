@@ -2,13 +2,13 @@
 
 ## Overview
 
-VR Step Recognition is a project aimed at recognizing and analyzing steps in a virtual reality environment. This project leverages advanced machine learning algorithms to accurately detect and interpret user movements.
+VR Step Recognition is a project aimed at recognizing and analyzing steps in a virtual reality environment. This project leverages machine learning algorithms to accurately detect and interpret user movements.
 
 ## Features
 
 - Real-time motion-based step detection using pre-trained model.
 - Record steps and motion timeline and export it as CSV file.
-- Train machine learning models using one or many pre-recorded timelines (CSV files).
+- Train machine learning models using timelines (CSV files).
 - Replay timeline (CSV file) in Unity.
 
 ## Installation for Windows
@@ -16,9 +16,9 @@ VR Step Recognition is a project aimed at recognizing and analyzing steps in a v
 1. Clone the project
 2. Open the project with [**Unity Editor v2023.2.20f1**](https://unity.com/releases/editor/whats-new/2023.2.20#installs)
 
-### (Optional) If you need to train models, follow the additional steps below:
+### (Optional) If you need to train models, follow the additional steps below
 
-3. **Install a **Python interpreter** that is **supported by PyTorch**:
+3. Install a **Python interpreter** that is **supported by PyTorch**:
    - Download and install Python 3.8.x from the [official Python website](https://www.python.org/downloads/release/python-3819/).
 
    - or install using **Winget**:
@@ -55,13 +55,13 @@ Start a new record using the Game UI in Unity.
 - When you start recording, the motion data of the headset and both controllers will be recorded until you stop recording.
 - To record your steps in sync with the motion data, touch the Joystick of the left/right controller as soon as your left/right foot touches the ground. You should see the grey screen turn blue/red to provide you with feedback, so you know that your step was registered.
 
-**Note:** When you record data, the CSV will be saved in `Assets\MLTrainingData`
+**Note:** When you record a timeline, the CSV will be saved in `Assets\MLTrainingData`
 
-**Important:** By default, all CSV files inside `Assets\MLTrainingData` will be used to train and test the next step recognition model. Therefore it is recommanded to delete low-quality CSVs.
+**Important:** By default, all CSV files inside `Assets\MLTrainingData` will be used to train and test the next step recognition model. Therefore it is recommanded to delete low-quality CSVs from prior recordings.
 
 **Tips for high quality recordings:**
 
-- Stop the recording and start a new one from time to time, so its easier to delete bad records when you register or miss a step by accident.
+- Stop the recording and start a new one from time to time, so its easier to delete bad recordings when you register or miss a step by accident.
 
 - Stand still occationally without performing steps.
 
