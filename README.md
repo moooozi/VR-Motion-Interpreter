@@ -107,6 +107,14 @@ python train_model.py
 - A good ratio of training/evaluation data split is 80/20.
 - Use the highest quality CSVs for evaluation.
 
+### Use your trained step recognition model
+
+Inside Unity Editor, locate the `Sentis` object at the root of the scene and specify an alternative Model Asset (ONNX file) (see screenshot).
+
+![Sentis object properties](image.png)
+
+**Bug:** The script is configured to load the latest created model inside `Assets\MLModels` directory if no model is specified. However, due to a bug in Sentis this does not work, therefore a model must be defined.
+
 ## License
 
 This project is licensed under the MIT License. See the [`LICENSE`](LICENSE) file for more information.

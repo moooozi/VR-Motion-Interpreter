@@ -32,7 +32,11 @@ labels_eval = []
 # Loop through the list of CSV files
 for csv_file in csv_files:
     # Read each CSV file into a DataFrame
-    df = pd.read_csv(csv_file)
+    df = pd.read_csv(csv_file, skipfooter=1, engine='python')
+
+    if len(df) < 10:
+        print(f"Skipping {csv_file}: less than 10 lines")
+        continue
 
     # Preprocess data
     df = df.dropna()
@@ -122,7 +126,7 @@ criterion = nn.CrossEntropyLoss(weight=class_weights)
 
 # Train model
 criterion = nn.CrossEntropyLoss(weight=class_weights)
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.002)
 
 best_val_loss = float("Inf") 
 epochs_no_improve = 0

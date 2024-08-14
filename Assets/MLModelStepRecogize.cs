@@ -2,7 +2,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Sentis;
-using Unity.Sentis.Layers;
 using UnityEngine;
 
 public class MLModelStepRecogize : MonoBehaviour
@@ -15,15 +14,34 @@ public class MLModelStepRecogize : MonoBehaviour
     private IWorker worker;
     private TensorFloat inputTensor;
 
-    private MotionDebugging motionDebugging;
-
-
-    void Start()
+    void Awake()
     {
-        //motionDebugging = GetComponent<MotionDebugging>();
-        //runtimeModel = ModelLoader.Load(modelAsset);
-        //worker = runtimeModel.CreateWorker(runtimeModel);
-        runtimeModel = ModelLoader.Load(modelAsset);
+        // If the model asset is null, look for a model asset in "Assets\MLModels" and pick the latest one
+        if (modelAsset == null)
+        {
+            // Get the latest .onnx file in the "Assets/MLModels" folder by creation time
+            string latestModelPath = System.IO.Directory.GetFiles("Assets/MLModels", "*.onnx")
+                .OrderByDescending(f => new System.IO.FileInfo(f).CreationTime)
+                .FirstOrDefault();
+            
+            if (!string.IsNullOrEmpty(latestModelPath))
+            {
+                string absoluteModelPath = System.IO.Path.GetFullPath(latestModelPath);
+                Debug.Log("No model asset specified, using the latest model: " + absoluteModelPath);
+                
+                // Convert the path to a model asset
+                runtimeModel = ModelLoader.Load(absoluteModelPath);
+            }
+            else
+            {
+                Debug.Log("No .onnx model files found in the Assets/MLModels directory.");
+            }
+
+        } else
+        {
+            // Load the model asset
+            runtimeModel = ModelLoader.Load(modelAsset);
+        }
 
         worker = WorkerFactory.CreateWorker(BackendType.GPUCompute, runtimeModel);
 
